@@ -17,7 +17,7 @@ pandas>=1.5.0
 optax>=0.1.0
 chex>=0.1.0
 flax>=0.7.0
-scikit-optimize>=0.9.0
+scikit-optimize>=0.10.2
 bayesian-optimization>=1.4.0
 
 # Web and API packages
