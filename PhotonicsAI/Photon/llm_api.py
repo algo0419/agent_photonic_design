@@ -6,44 +6,49 @@ import re
 
 # Third-party imports
 import anthropic
-import backoff
 import google.generativeai as genai
 import tiktoken
 import yaml
-from dotenv import load_dotenv
-from openai import OpenAI, RateLimitError
-from pydantic import BaseModel
 from deepseek_tokenizer import ds_token
+from dotenv import load_dotenv
+from openai import OpenAI
+from pydantic import BaseModel
 
 # Local imports
 from PhotonicsAI.config import CONF, PATH
 
 load_dotenv()
 
+
 # Session-specific token tracking for Google Gemini models
 def get_session_token_usage():
     """Get token usage from current session state."""
     import streamlit as st
-    if 'token_usage' not in st.session_state:
+
+    if "token_usage" not in st.session_state:
         st.session_state.token_usage = {
             "non_cached_input_tokens": 0,
             "cached_input_tokens": 0,
-            "output_tokens": 0
+            "output_tokens": 0,
         }
     return st.session_state.token_usage
+
 
 def reset_token_usage():
     """Reset token usage counters for current session."""
     import streamlit as st
+
     st.session_state.token_usage = {
         "non_cached_input_tokens": 0,
         "cached_input_tokens": 0,
-        "output_tokens": 0
+        "output_tokens": 0,
     }
+
 
 def get_token_usage():
     """Get current token usage for current session."""
     return get_session_token_usage().copy()
+
 
 def add_token_usage(input_tokens, output_tokens, is_cached=False):
     """Add token usage to the current session counter."""
@@ -54,39 +59,42 @@ def add_token_usage(input_tokens, output_tokens, is_cached=False):
         token_usage["non_cached_input_tokens"] += input_tokens
     token_usage["output_tokens"] += output_tokens
 
+
 def debug_token_usage():
     """Debug function to print current session token usage."""
     import streamlit as st
+
     token_usage = get_token_usage()
     print(f"Current session token usage: {token_usage}")
-    if hasattr(st.session_state, '_session_id'):
+    if hasattr(st.session_state, "_session_id"):
         print(f"Session ID: {st.session_state._session_id}")
+
 
 def debug_anthropic_response(message):
     """Debug function to inspect Anthropic response structure."""
     print("=== Anthropic Response Debug ===")
     print(f"Response type: {type(message)}")
     print(f"Response attributes: {dir(message)}")
-    
+
     # Check for usage information
-    if hasattr(message, 'usage'):
+    if hasattr(message, "usage"):
         print(f"Usage object: {message.usage}")
         print(f"Usage type: {type(message.usage)}")
         if message.usage:
             print(f"Usage attributes: {dir(message.usage)}")
-            if hasattr(message.usage, 'input_tokens'):
+            if hasattr(message.usage, "input_tokens"):
                 print(f"Input tokens: {message.usage.input_tokens}")
-            if hasattr(message.usage, 'output_tokens'):
+            if hasattr(message.usage, "output_tokens"):
                 print(f"Output tokens: {message.usage.output_tokens}")
     else:
         print("No usage object found in response")
-    
+
     # Check for content blocks (thinking and text)
-    if hasattr(message, 'content'):
+    if hasattr(message, "content"):
         print(f"Content blocks: {len(message.content)}")
         thinking_blocks = 0
         text_blocks = 0
-        
+
         for i, block in enumerate(message.content):
             print(f"Block {i}: type={block.type}")
             if block.type == "thinking":
@@ -95,11 +103,12 @@ def debug_anthropic_response(message):
             elif block.type == "text":
                 text_blocks += 1
                 print(f"  Text length: {len(block.text)} characters")
-        
+
         print(f"Total thinking blocks: {thinking_blocks}")
         print(f"Total text blocks: {text_blocks}")
-    
+
     print("================================")
+
 
 try:
     with open(PATH.prompts) as file:
@@ -108,7 +117,7 @@ except FileNotFoundError:
     print(f"No {PATH.prompts} file found.")
     pass
 
-LOCATION='us-east5'
+LOCATION = "us-east5"
 
 
 def get_openai_client():
@@ -129,54 +138,46 @@ def resolve_structured_output_model(model=None):
     """Resolve the OpenAI model used for structured outputs."""
     return model or CONF.openai_structured_model or "gpt-4o"
 
-def call_anthropic(prompt, sys_prompt, model='claude-3-7-sonnet-20250219'):
 
+def call_anthropic(prompt, sys_prompt, model="claude-3-7-sonnet-20250219"):
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    
+
     message = client.messages.create(
         model=model,
         max_tokens=16000,
-        thinking={
-            "type": "enabled",
-            "budget_tokens": 10000
-        },
+        thinking={"type": "enabled", "budget_tokens": 10000},
         # temperature=0.1,
         system=sys_prompt,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        stream=True  # Enable streaming for long requests
+        messages=[{"role": "user", "content": prompt}],
+        stream=True,  # Enable streaming for long requests
     )
-    
+
     # Handle streaming response
     full_content = ""
     usage_info = None
-    
+
     for chunk in message:
         try:
             if chunk.type == "content_block_delta":
                 # Handle thinking deltas (have 'thinking' attribute)
-                if hasattr(chunk.delta, 'thinking'):
+                if hasattr(chunk.delta, "thinking"):
                     # Skip thinking content - we only want the final response
                     pass
-                # Handle text deltas (have 'text' attribute)  
-                elif hasattr(chunk.delta, 'text'):
+                # Handle text deltas (have 'text' attribute)
+                elif hasattr(chunk.delta, "text"):
                     full_content += chunk.delta.text
             elif chunk.type == "message_delta":
                 # Capture usage information from message_delta
-                if hasattr(chunk, 'usage'):
+                if hasattr(chunk, "usage"):
                     usage_info = chunk.usage
             elif chunk.type == "message_stop":
                 # End of message
                 break
             # Skip other chunk types (message_start, content_block_start, content_block_stop, etc.)
-        except Exception as e:
+        except Exception:
             # Continue processing other chunks
             continue
-    
+
     # Create a mock message object with the collected content
     class MockMessage:
         def __init__(self, content, usage):
@@ -185,108 +186,116 @@ def call_anthropic(prompt, sys_prompt, model='claude-3-7-sonnet-20250219'):
                 def __init__(self, text):
                     self.type = "text"
                     self.text = text
-            
+
             self.content = [ContentBlock(content)]
             self.usage = usage
-    
+
     message = MockMessage(full_content, usage_info)
-    
+
     # Track token usage
     try:
         # Debug the response structure to understand what's available
         debug_anthropic_response(message)
-        
+
         # Check if the response has usage information (including thinking tokens)
-        if hasattr(message, 'usage') and message.usage:
+        if hasattr(message, "usage") and message.usage:
             # Use the usage information from the response if available
-            input_tokens = message.usage.input_tokens if hasattr(message.usage, 'input_tokens') else 0
-            output_tokens = message.usage.output_tokens if hasattr(message.usage, 'output_tokens') else 0
-            
+            input_tokens = (
+                message.usage.input_tokens
+                if hasattr(message.usage, "input_tokens")
+                else 0
+            )
+            output_tokens = (
+                message.usage.output_tokens
+                if hasattr(message.usage, "output_tokens")
+                else 0
+            )
+
             # If thinking was enabled, the output_tokens should include thinking tokens
             # according to Anthropic's API documentation
-            print(f"Anthropic response usage - Input: {input_tokens}, Output: {output_tokens}")
-            print("Note: If thinking was enabled, output_tokens includes thinking tokens")
-            
+            print(
+                f"Anthropic response usage - Input: {input_tokens}, Output: {output_tokens}"
+            )
+            print(
+                "Note: If thinking was enabled, output_tokens includes thinking tokens"
+            )
+
         else:
             # Fallback to manual token counting
             # Count input tokens (system prompt + user prompt)
             count_response = client.messages.count_tokens(
-                model=model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+                model=model, messages=[{"role": "user", "content": prompt}]
             )
             input_tokens = count_response.input_tokens
-            
+
             # Add system prompt tokens
             if sys_prompt:
                 sys_count_response = client.messages.count_tokens(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": sys_prompt}
-                    ]
+                    model=model, messages=[{"role": "system", "content": sys_prompt}]
                 )
                 input_tokens += sys_count_response.input_tokens
-            
+
             # For output tokens, count the response content
             # Extract all text blocks from the response
             response_text = ""
             for block in message.content:
                 if block.type == "text":
                     response_text += block.text
-            
+
             output_tokens = client.messages.count_tokens(
-                model=model,
-                messages=[
-                    {"role": "assistant", "content": response_text}
-                ]
+                model=model, messages=[{"role": "assistant", "content": response_text}]
             ).input_tokens
-            
+
             # Note: This doesn't include thinking tokens since we can't access them
             # when using manual counting. The thinking tokens are only available
             # in the response.usage object when the API provides it.
-            print(f"Manual token counting - Input: {input_tokens}, Output: {output_tokens}")
+            print(
+                f"Manual token counting - Input: {input_tokens}, Output: {output_tokens}"
+            )
             print("Warning: Thinking tokens not included in manual counting")
-        
+
         # Add to session token usage (assuming not cached for now)
         add_token_usage(input_tokens, output_tokens, is_cached=False)
-        
+
     except Exception as e:
         # If token tracking fails, continue without it
         print(f"Token tracking error in call_anthropic: {e}")
         # Fallback to tiktoken estimation
         try:
             input_tokens = len(tokenizer.encode(prompt + sys_prompt))
-            
+
             # Extract all text blocks from the response
             response_text = ""
             for block in message.content:
                 if block.type == "text":
                     response_text += block.text
-            
+
             output_tokens = len(tokenizer.encode(response_text))
             add_token_usage(input_tokens, output_tokens, is_cached=False)
-            print(f"Fallback tiktoken counting - Input: {input_tokens}, Output: {output_tokens}")
+            print(
+                f"Fallback tiktoken counting - Input: {input_tokens}, Output: {output_tokens}"
+            )
             print("Warning: Thinking tokens not included in fallback counting")
         except Exception as e2:
             print(f"Fallback token tracking also failed: {e2}")
-    
+
     # Summary of token counting approach:
     # 1. If response.usage is available: Uses Anthropic's official token counts (includes thinking tokens)
     # 2. If not available: Manual counting of system+user prompts and response text (excludes thinking tokens)
     # 3. Fallback: tiktoken estimation (excludes thinking tokens)
-    
+
     # Extract all text blocks for the final response
     response_text = ""
     for block in message.content:
         if block.type == "text":
             response_text += block.text
-    
-    with open('anthropic_response.yml', 'w') as outfile:
+
+    with open("anthropic_response.yml", "w") as outfile:
         yaml.dump(message.content, outfile)
     return response_text
 
-def call_google(prompt, sys_prompt, model='gemini-2.5-pro'):
+
+def call_google(prompt, sys_prompt, model="gemini-2.5-pro"):
     """Calling google API using GenerativeModel with enhanced thinking support.
 
     Args:
@@ -299,17 +308,19 @@ def call_google(prompt, sys_prompt, model='gemini-2.5-pro'):
     except ImportError as e:
         print(f"Google Generative AI library not available: {e}")
         print("Falling back to a simple response indicating the issue.")
-        return "Error: Google Generative AI library not properly installed or configured."
-    
+        return (
+            "Error: Google Generative AI library not properly installed or configured."
+        )
+
     try:
         # Configure the API key
         genai.configure(api_key=os.getenv("GOOGLEGENAI_API_KEY"))
     except Exception as e:
         print(f"Failed to configure Google Generative AI: {e}")
         return "Error: Failed to configure Google Generative AI API."
-    
+
     prompt = truncate_prompt(prompt)
-    
+
     # WORKAROUND 1: Convert system prompt to user message to avoid system instruction filtering
     # Combine system prompt and user prompt into a single user message
     combined_prompt = f"""
@@ -320,9 +331,9 @@ User: {prompt}
 Assistant: I am ready to generate the DOT graph. Shall I continue?
 User: Yes please, generate the DOT graph for the photonic circuit.
 """
-    
+
     # Debug output removed for cleaner terminal
-    
+
     try:
         # Create model WITHOUT system instruction (workaround 1)
         model_instance = genai.GenerativeModel(
@@ -332,38 +343,25 @@ User: Yes please, generate the DOT graph for the photonic circuit.
     except Exception as e:
         print(f"Failed to create Google Generative AI model: {e}")
         return "Error: Failed to create Google Generative AI model."
-    
+
     # Generate content with disabled safety filters
     try:
         # Try with explicit safety settings to disable all filters
         safety_settings = [
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT", 
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_NONE"
-            }
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
         ]
-        
+
         # WORKAROUND 2: Use prefill with assistant saying it will begin
         # WORKAROUND 3: Disable streaming by not using stream=True
         response = model_instance.generate_content(
             combined_prompt,
             generation_config=genai.types.GenerationConfig(
-                candidate_count=1,
-                temperature=0.1
+                candidate_count=1, temperature=0.1
             ),
-            safety_settings=safety_settings
+            safety_settings=safety_settings,
             # No stream=True to avoid streaming filter issues
         )
         # Using generation with explicit safety settings disabled
@@ -374,10 +372,9 @@ User: Yes please, generate the DOT graph for the photonic circuit.
             response = model_instance.generate_content(
                 combined_prompt,
                 generation_config=genai.types.GenerationConfig(
-                    candidate_count=1,
-                    temperature=0.1
+                    candidate_count=1, temperature=0.1
                 ),
-                safety_settings=None  # Completely disable safety filters
+                safety_settings=None,  # Completely disable safety filters
                 # No stream=True to avoid streaming filter issues
             )
             # Using generation with safety filters completely disabled
@@ -388,54 +385,59 @@ User: Yes please, generate the DOT graph for the photonic circuit.
                 response = model_instance.generate_content(
                     combined_prompt,
                     generation_config=genai.types.GenerationConfig(
-                        candidate_count=1,
-                        temperature=0.1
-                    )
+                        candidate_count=1, temperature=0.1
+                    ),
                     # No stream=True to avoid streaming filter issues
                 )
                 # Using basic generation without safety settings
             except Exception as e3:
                 print(f"All approaches failed: {e3}")
                 return "Error: Failed to generate content with Google Generative AI."
-    
+
     # Track token usage with detailed thinking token tracking
     try:
         # Get token counts from response metadata
         input_tokens = 0
         output_tokens = 0
         thoughts_tokens = 0
-        
-        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
             # Access token counts from usage metadata
             usage_metadata = response.usage_metadata
-            
+
             # Get input tokens (prompt tokens)
-            if hasattr(usage_metadata, 'prompt_token_count'):
+            if hasattr(usage_metadata, "prompt_token_count"):
                 input_tokens = usage_metadata.prompt_token_count
-            elif hasattr(usage_metadata, 'input_token_count'):
+            elif hasattr(usage_metadata, "input_token_count"):
                 input_tokens = usage_metadata.input_token_count
-            
+
             # Get output tokens (candidate tokens)
-            if hasattr(usage_metadata, 'candidates_token_count'):
+            if hasattr(usage_metadata, "candidates_token_count"):
                 output_tokens = usage_metadata.candidates_token_count
-            elif hasattr(usage_metadata, 'output_token_count'):
+            elif hasattr(usage_metadata, "output_token_count"):
                 output_tokens = usage_metadata.output_token_count
-            
+
             # Get thinking tokens if available
-            if hasattr(usage_metadata, 'thoughts_token_count'):
+            if hasattr(usage_metadata, "thoughts_token_count"):
                 thoughts_tokens = usage_metadata.thoughts_token_count
-            elif hasattr(usage_metadata, 'thinking_token_count'):
+            elif hasattr(usage_metadata, "thinking_token_count"):
                 thoughts_tokens = usage_metadata.thinking_token_count
-            
+
             # Debug: print all available attributes in usage_metadata
-            print(f"Usage metadata attributes: {[x for x in dir(usage_metadata) if not x.startswith('_')]}")
-        
-        print(f"Google response usage - Input: {input_tokens}, Output: {output_tokens}, Thoughts: {thoughts_tokens}")
-        print(f"Total tokens (including thinking): {input_tokens + output_tokens + thoughts_tokens}")
-        
+            print(
+                f"Usage metadata attributes: {[x for x in dir(usage_metadata) if not x.startswith('_')]}"
+            )
+
+        print(
+            f"Google response usage - Input: {input_tokens}, Output: {output_tokens}, Thoughts: {thoughts_tokens}"
+        )
+        print(
+            f"Total tokens (including thinking): {input_tokens + output_tokens + thoughts_tokens}"
+        )
+
         # Add thoughts tokens to output tokens for total tracking
         total_output_tokens = output_tokens + thoughts_tokens
-        
+
         # If we can't get token counts from response, estimate them
         if input_tokens == 0:
             # Estimate input tokens (prompt + system prompt)
@@ -443,34 +445,39 @@ User: Yes please, generate the DOT graph for the photonic circuit.
         if total_output_tokens == 0:
             # Estimate output tokens
             total_output_tokens = len(tokenizer.encode(response.text))
-        
+
         # Add to global token usage (assuming not cached for now)
         add_token_usage(input_tokens, total_output_tokens, is_cached=False)
-        
+
     except Exception as e:
         # If token tracking fails, continue without it
         print(f"Token tracking error: {e}")
-    
+
     # Debug output removed for cleaner terminal
-    
+
     # Check if response has valid content
-    if not response or not hasattr(response, 'text') or not response.text:
+    if not response or not hasattr(response, "text") or not response.text:
         print("Warning: Google API returned empty or invalid response")
         return "Error: No valid response from Google API. The request may have been blocked or filtered."
-    
+
     # Check for finish reason indicating blocked content
-    if hasattr(response, 'candidates') and response.candidates:
-        for i, candidate in enumerate(response.candidates):
-            if hasattr(candidate, 'finish_reason') and candidate.finish_reason == 1:
+    if hasattr(response, "candidates") and response.candidates:
+        for candidate in response.candidates:
+            if hasattr(candidate, "finish_reason") and candidate.finish_reason == 1:
                 # finish_reason=1 means STOP (successful completion), not blocked!
                 # Continue with normal processing
                 pass
-    
-    with open('google_response.yml', 'w') as outfile:
-        yaml.dump(response.text.replace("```", "").replace("yaml", "").replace("dot\n", ""), outfile)
+
+    with open("google_response.yml", "w") as outfile:
+        yaml.dump(
+            response.text.replace("```", "").replace("yaml", "").replace("dot\n", ""),
+            outfile,
+        )
     return response.text.replace("```", "").replace("yaml", "").replace("dot\n", "")
 
+
 tokenizer = tiktoken.get_encoding("o200k_base")
+
 
 def count_deepseek_tokens(text):
     """Count tokens using the fast DeepSeek tokenizer."""
@@ -502,7 +509,12 @@ def truncate_prompt(prompt, max_tokens=120000):
     return prompt
 
 
-def call_nvidia(prompt, sys_prompt="", model="nvidia/llama-3.1-nemotron-ultra-253b-v1", n_completion=1):
+def call_nvidia(
+    prompt,
+    sys_prompt="",
+    model="nvidia/llama-3.1-nemotron-ultra-253b-v1",
+    n_completion=1,
+):
     """Calling openai API.
 
     Args:
@@ -512,26 +524,38 @@ def call_nvidia(prompt, sys_prompt="", model="nvidia/llama-3.1-nemotron-ultra-25
     """
     prompt = truncate_prompt(prompt)
 
-    client = OpenAI(base_url='https://integrate.api.nvidia.com/v1', api_key=os.getenv("NVIDIA_API_KEY"))
+    client = OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=os.getenv("NVIDIA_API_KEY"),
+    )
     response = client.chat.completions.create(
         model=model,
         temperature=0.2,
-        top_p = 0.7,
+        top_p=0.7,
         n=n_completion,
-        stream = False,
+        stream=False,
         messages=[
             {"role": "system", "content": "detailed thinking off"},
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": prompt},
         ],
     )
-    
+
     # Track token usage
     try:
         # Get token counts from response
-        input_tokens = response.usage.prompt_tokens if hasattr(response, 'usage') and hasattr(response.usage, 'prompt_tokens') else 0
-        output_tokens = response.usage.completion_tokens if hasattr(response, 'usage') and hasattr(response.usage, 'completion_tokens') else 0
-        
+        input_tokens = (
+            response.usage.prompt_tokens
+            if hasattr(response, "usage") and hasattr(response.usage, "prompt_tokens")
+            else 0
+        )
+        output_tokens = (
+            response.usage.completion_tokens
+            if hasattr(response, "usage")
+            and hasattr(response.usage, "completion_tokens")
+            else 0
+        )
+
         # If we can't get token counts from response, estimate them
         if input_tokens == 0:
             # Estimate input tokens (prompt + system prompt)
@@ -539,28 +563,35 @@ def call_nvidia(prompt, sys_prompt="", model="nvidia/llama-3.1-nemotron-ultra-25
         if output_tokens == 0:
             # Estimate output tokens
             if n_completion == 1:
-                output_tokens = len(tokenizer.encode(response.choices[0].message.content))
+                output_tokens = len(
+                    tokenizer.encode(response.choices[0].message.content)
+                )
             else:
                 # For multiple completions, sum all output tokens
-                output_tokens = sum(len(tokenizer.encode(choice.message.content)) for choice in response.choices)
-        
+                output_tokens = sum(
+                    len(tokenizer.encode(choice.message.content))
+                    for choice in response.choices
+                )
+
         # Add to session token usage (assuming not cached for now)
         add_token_usage(input_tokens, output_tokens, is_cached=False)
-        
+
     except Exception as e:
         # If token tracking fails, continue without it
         print(f"Token tracking error in call_nvidia: {e}")
 
     # function to remove COT outputs in Nemotron API calls
-    splice = lambda x : re.sub(r'<think>.*?</think>', '', x, flags=re.DOTALL)
-    
-    with open('nvidia_response.yml', 'w') as outfile:
+    def splice(text):
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+
+    with open("nvidia_response.yml", "w") as outfile:
         yaml.dump(response.choices[0].message.content, outfile)
 
     if n_completion == 1:
         return splice(response.choices[0].message.content)
     else:
         return [splice(r.message.content) for r in response.choices]
+
 
 def call_openai(prompt, sys_prompt="", model=None, n_completion=1):
     """Calling openai API.
@@ -582,13 +613,22 @@ def call_openai(prompt, sys_prompt="", model=None, n_completion=1):
             {"role": "user", "content": prompt},
         ],
     )
-    
+
     # Track token usage
     try:
         # Get token counts from response
-        input_tokens = response.usage.prompt_tokens if hasattr(response, 'usage') and hasattr(response.usage, 'prompt_tokens') else 0
-        output_tokens = response.usage.completion_tokens if hasattr(response, 'usage') and hasattr(response.usage, 'completion_tokens') else 0
-        
+        input_tokens = (
+            response.usage.prompt_tokens
+            if hasattr(response, "usage") and hasattr(response.usage, "prompt_tokens")
+            else 0
+        )
+        output_tokens = (
+            response.usage.completion_tokens
+            if hasattr(response, "usage")
+            and hasattr(response.usage, "completion_tokens")
+            else 0
+        )
+
         # If we can't get token counts from response, estimate them
         if input_tokens == 0:
             # Estimate input tokens (prompt + system prompt)
@@ -596,14 +636,19 @@ def call_openai(prompt, sys_prompt="", model=None, n_completion=1):
         if output_tokens == 0:
             # Estimate output tokens
             if n_completion == 1:
-                output_tokens = len(tokenizer.encode(response.choices[0].message.content))
+                output_tokens = len(
+                    tokenizer.encode(response.choices[0].message.content)
+                )
             else:
                 # For multiple completions, sum all output tokens
-                output_tokens = sum(len(tokenizer.encode(choice.message.content)) for choice in response.choices)
-        
+                output_tokens = sum(
+                    len(tokenizer.encode(choice.message.content))
+                    for choice in response.choices
+                )
+
         # Add to session token usage (assuming not cached for now)
         add_token_usage(input_tokens, output_tokens, is_cached=False)
-        
+
     except Exception as e:
         # If token tracking fails, continue without it
         print(f"Token tracking error in call_openai: {e}")
@@ -630,13 +675,22 @@ def call_openai_reasoning(prompt, model=None):
             {"role": "user", "content": prompt},
         ],
     )
-    
+
     # Track token usage
     try:
         # Get token counts from response
-        input_tokens = response.usage.prompt_tokens if hasattr(response, 'usage') and hasattr(response.usage, 'prompt_tokens') else 0
-        output_tokens = response.usage.completion_tokens if hasattr(response, 'usage') and hasattr(response.usage, 'completion_tokens') else 0
-        
+        input_tokens = (
+            response.usage.prompt_tokens
+            if hasattr(response, "usage") and hasattr(response.usage, "prompt_tokens")
+            else 0
+        )
+        output_tokens = (
+            response.usage.completion_tokens
+            if hasattr(response, "usage")
+            and hasattr(response.usage, "completion_tokens")
+            else 0
+        )
+
         # If we can't get token counts from response, estimate them
         if input_tokens == 0:
             # Estimate input tokens
@@ -644,10 +698,10 @@ def call_openai_reasoning(prompt, model=None):
         if output_tokens == 0:
             # Estimate output tokens
             output_tokens = len(tokenizer.encode(response.choices[0].message.content))
-        
+
         # Add to session token usage (assuming not cached for now)
         add_token_usage(input_tokens, output_tokens, is_cached=False)
-        
+
     except Exception as e:
         # If token tracking fails, continue without it
         print(f"Token tracking error in call_openai_reasoning: {e}")
@@ -681,6 +735,7 @@ def callgpt_pydantic(prompt, sys_prompt, pydantic_model, model=None):
         print(message.refusal)
         return message.refusal
 
+
 def calldeepseek_pydantic(prompt, sys_prompt, pydantic_model):
     """Calling openai with pydantic model.
 
@@ -689,7 +744,10 @@ def calldeepseek_pydantic(prompt, sys_prompt, pydantic_model):
         sys_prompt: The system prompt to send to the model.
         pydantic_model: The pydantic model to use for the completion.
     """
-    client = OpenAI(base_url='https://integrate.api.nvidia.com/v1', api_key=os.getenv("DEEPSEEK_API_KEY"))
+    client = OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=os.getenv("DEEPSEEK_API_KEY"),
+    )
 
     completion = client.beta.chat.completions.parse(
         model="deepseek-ai/deepseek-r1",
@@ -699,7 +757,7 @@ def calldeepseek_pydantic(prompt, sys_prompt, pydantic_model):
         ],
         response_format=pydantic_model,
     )
-    
+
     message = completion.choices[0].message
     if message.parsed:
         return message.parsed
@@ -707,30 +765,35 @@ def calldeepseek_pydantic(prompt, sys_prompt, pydantic_model):
         print(message.refusal)
         return message.refusal
 
+
 def callgoogle_pydantic(prompt, sys_prompt, pydantic_model):
     genai.configure(api_key=os.getenv("GOOGLEGENAI_API_KEY"))
     prompt = truncate_prompt(prompt)
-    model=genai.GenerativeModel(
-    model_name='gemini-1.5-pro',
-    system_instruction=sys_prompt)
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-pro", system_instruction=sys_prompt
+    )
 
-    response = model.generate_content(prompt,
+    response = model.generate_content(
+        prompt,
         generation_config=genai.types.GenerationConfig(
             candidate_count=1,
             temperature=0.5,
-            response_mime_type='application/json',
-            response_schema=pydantic_model)
+            response_mime_type="application/json",
+            response_schema=pydantic_model,
+        ),
     )
-    
-    with open('google_response.yml', 'w') as outfile:
+
+    with open("google_response.yml", "w") as outfile:
         yaml.dump(response.text, outfile)
-    
+
     class Struct:
         def __init__(self, **entries):
             self.__dict__.update(entries)
+
     response_dict = json.loads(response.text)
     s = Struct(**response_dict)
     return s
+
 
 def parse_and_validate_list(string):
     """Parse and validate a list from a string.
@@ -741,39 +804,44 @@ def parse_and_validate_list(string):
     try:
         # Clean up the string - remove any markdown formatting
         cleaned_string = string.strip()
-        if cleaned_string.startswith('```'):
+        if cleaned_string.startswith("```"):
             # Remove markdown code blocks
-            lines = cleaned_string.split('\n')
-            if lines[0].startswith('```'):
+            lines = cleaned_string.split("\n")
+            if lines[0].startswith("```"):
                 lines = lines[1:]
-            if lines[-1].startswith('```'):
+            if lines[-1].startswith("```"):
                 lines = lines[:-1]
-            cleaned_string = '\n'.join(lines).strip()
-        
+            cleaned_string = "\n".join(lines).strip()
+
         # Remove language identifiers at the beginning (like "python", "yaml", etc.)
-        lines = cleaned_string.split('\n')
-        if lines and lines[0].strip().lower() in ['python', 'yaml', 'json']:
+        lines = cleaned_string.split("\n")
+        if lines and lines[0].strip().lower() in ["python", "yaml", "json"]:
             lines = lines[1:]
-            cleaned_string = '\n'.join(lines).strip()
-        
+            cleaned_string = "\n".join(lines).strip()
+
         # Step 1: Parse the string
         parsed_list = ast.literal_eval(cleaned_string)
 
         # Step 2: Check if the parsed result is a list
         if not isinstance(parsed_list, list):
-            raise ValueError(f"Parsed result is not a list, got {type(parsed_list)}: {parsed_list}")
+            raise ValueError(
+                f"Parsed result is not a list, got {type(parsed_list)}: {parsed_list}"
+            )
 
         # Step 3: Verify that all elements in the list are integers
         if all(isinstance(item, int) for item in parsed_list):
             return parsed_list
         else:
             non_integers = [item for item in parsed_list if not isinstance(item, int)]
-            raise ValueError(f"Not all elements in the list are integers. Non-integers: {non_integers}")
+            raise ValueError(
+                f"Not all elements in the list are integers. Non-integers: {non_integers}"
+            )
 
     except (ValueError, SyntaxError) as e:
         print(f"Error parsing list from string: {e}")
         print(f"Original string: {string}")
         return None
+
 
 # @backoff.on_exception(backoff.expo, RateLimitError)
 def call_deepseek(prompt, sys_prompt="", model="deepseek-reasoner", n_completion=1):
@@ -786,7 +854,9 @@ def call_deepseek(prompt, sys_prompt="", model="deepseek-reasoner", n_completion
     """
     prompt = truncate_prompt(prompt)
 
-    client = OpenAI(base_url='https://api.deepseek.com/v1', api_key=os.getenv("DEEPSEEK_API_KEY"))
+    client = OpenAI(
+        base_url="https://api.deepseek.com/v1", api_key=os.getenv("DEEPSEEK_API_KEY")
+    )
     response = client.chat.completions.create(
         model=model,
         temperature=0.6,
@@ -795,27 +865,36 @@ def call_deepseek(prompt, sys_prompt="", model="deepseek-reasoner", n_completion
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": prompt},
         ],
-        stream=False
+        stream=False,
     )
-    
+
     while isinstance(response, str):
         response = client.chat.completions.create(
-        model=model,
-        temperature=0.6,
-        n=n_completion,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        stream=False
-    )
-    
+            model=model,
+            temperature=0.6,
+            n=n_completion,
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            stream=False,
+        )
+
     # Track token usage
     try:
         # Get token counts from response
-        input_tokens = response.usage.prompt_tokens if hasattr(response, 'usage') and hasattr(response.usage, 'prompt_tokens') else 0
-        output_tokens = response.usage.completion_tokens if hasattr(response, 'usage') and hasattr(response.usage, 'completion_tokens') else 0
-        
+        input_tokens = (
+            response.usage.prompt_tokens
+            if hasattr(response, "usage") and hasattr(response.usage, "prompt_tokens")
+            else 0
+        )
+        output_tokens = (
+            response.usage.completion_tokens
+            if hasattr(response, "usage")
+            and hasattr(response.usage, "completion_tokens")
+            else 0
+        )
+
         # If we can't get token counts from response, use fast DeepSeek tokenizer
         if input_tokens == 0 or output_tokens == 0:
             # Use fast DeepSeek tokenizer for accurate counting
@@ -826,13 +905,17 @@ def call_deepseek(prompt, sys_prompt="", model="deepseek-reasoner", n_completion
                 if input_tokens is None:
                     # Fallback to tiktoken
                     input_tokens = len(tokenizer.encode(input_text))
-            
+
             if output_tokens == 0:
                 # Count output tokens
                 if n_completion == 1:
-                    output_tokens = count_deepseek_tokens(response.choices[0].message.content)
+                    output_tokens = count_deepseek_tokens(
+                        response.choices[0].message.content
+                    )
                     if output_tokens is None:
-                        output_tokens = len(tokenizer.encode(response.choices[0].message.content))
+                        output_tokens = len(
+                            tokenizer.encode(response.choices[0].message.content)
+                        )
                 else:
                     # For multiple completions, sum all output tokens
                     output_tokens = 0
@@ -841,10 +924,10 @@ def call_deepseek(prompt, sys_prompt="", model="deepseek-reasoner", n_completion
                         if token_count is None:
                             token_count = len(tokenizer.encode(choice.message.content))
                         output_tokens += token_count
-        
+
         # Add to session token usage (assuming not cached for now)
         add_token_usage(input_tokens, output_tokens, is_cached=False)
-        
+
     except Exception as e:
         # If token tracking fails, continue without it
         print(f"Token tracking error in call_deepseek: {e}")
@@ -852,28 +935,35 @@ def call_deepseek(prompt, sys_prompt="", model="deepseek-reasoner", n_completion
         try:
             input_tokens = len(tokenizer.encode(prompt + sys_prompt))
             if n_completion == 1:
-                output_tokens = len(tokenizer.encode(response.choices[0].message.content))
+                output_tokens = len(
+                    tokenizer.encode(response.choices[0].message.content)
+                )
             else:
-                output_tokens = sum(len(tokenizer.encode(choice.message.content)) for choice in response.choices)
+                output_tokens = sum(
+                    len(tokenizer.encode(choice.message.content))
+                    for choice in response.choices
+                )
             add_token_usage(input_tokens, output_tokens, is_cached=False)
         except Exception as e2:
             print(f"Fallback token tracking also failed: {e2}")
-    
+
     # function to remove COT outputs in DeepSeek API calls
-    splice = lambda x : re.sub(r'<think>.*?</think>', '', x, flags=re.DOTALL)
-    
-        # yaml.dump(response.text, outfile)
+    def splice(text):
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+
+    # yaml.dump(response.text, outfile)
 
     if n_completion == 1:
-        with open('deepseek_response.yml', 'w') as outfile:
+        with open("deepseek_response.yml", "w") as outfile:
             yaml.dump(splice(response.choices[0].message.content), outfile)
         return splice(response.choices[0].message.content)
     else:
-        with open('deepseek_response.yml', 'w') as outfile:
+        with open("deepseek_response.yml", "w") as outfile:
             yaml.dump(splice(response.choices[0].message.content), outfile)
         return [splice(r.message.content) for r in response.choices]
-        
-def call_llm(prompt, sys_prompt,llm_api_selection="nvidia/nemotron-4-340b-instruct"):
+
+
+def call_llm(prompt, sys_prompt, llm_api_selection="nvidia/nemotron-4-340b-instruct"):
     """Call the LLM API.
 
     Args:
@@ -885,27 +975,26 @@ def call_llm(prompt, sys_prompt,llm_api_selection="nvidia/nemotron-4-340b-instru
         return call_openai(prompt, sys_prompt, llm_api_selection)
     if llm_api_selection[:4] == "nvid":
         print("NVIDIA")
-        return call_nvidia(prompt,sys_prompt, llm_api_selection)
+        return call_nvidia(prompt, sys_prompt, llm_api_selection)
     elif llm_api_selection[:2] == "o1" or llm_api_selection[:2] == "o3":
         return call_openai_reasoning(
             f"{prompt} \n {sys_prompt}", model=llm_api_selection
         )
     elif llm_api_selection[:8] == "deepseek":
-        return call_deepseek(
-            prompt, sys_prompt, llm_api_selection
-            )
-    elif llm_api_selection == 'gemini-1.5-flash':
-        return call_google(prompt, sys_prompt, model='gemini-1.5-flash')
-    elif llm_api_selection == 'gemini-2.0-flash':
-        return call_google(prompt, sys_prompt, model='gemini-2.0-flash')
-    elif llm_api_selection == 'gemini-1.5-pro':
-        return call_google(prompt, sys_prompt, model='gemini-1.5-pro')
+        return call_deepseek(prompt, sys_prompt, llm_api_selection)
+    elif llm_api_selection == "gemini-1.5-flash":
+        return call_google(prompt, sys_prompt, model="gemini-1.5-flash")
+    elif llm_api_selection == "gemini-2.0-flash":
+        return call_google(prompt, sys_prompt, model="gemini-2.0-flash")
+    elif llm_api_selection == "gemini-1.5-pro":
+        return call_google(prompt, sys_prompt, model="gemini-1.5-pro")
     elif llm_api_selection == "gemini-2.5-pro-preview-03-25":
         return call_google(prompt, sys_prompt, model="gemini-2.5-pro-preview-03-25")
     elif llm_api_selection == "gemini-2.5-pro":
         return call_google(prompt, sys_prompt, model="gemini-2.5-pro")
     elif llm_api_selection[:6] == "claude":
         return call_anthropic(prompt, sys_prompt, model=llm_api_selection)
+
 
 def llm_retrieve(query, contexts, llm_api_selection):
     """Retrieve the best matched photonic components based on the query.
@@ -1040,7 +1129,7 @@ Follow these instructions:
 - Each port can only take one edge.
 - Define only one edge between any two nodes, counting all node ports, unless explicitly stated.
 - Do not connect a node to itself, unless explicitly stated.
-- If there is only one node with no connections output Graph1. 
+- If there is only one node with no connections output Graph1.
 - Do not under any circumstances add additional nodes.
 
 Do not explain or provide reasoning; only output dot code for a single valid dot graph. Do not preamble with "```dot".
@@ -1052,11 +1141,14 @@ INPUT graph2:
 {session['p200_preschematic']}
 """
 
-    dot_graph_with_edges = call_llm(_prompt, "no prompt", session["p100_llm_api_selection"])
+    dot_graph_with_edges = call_llm(
+        _prompt, "no prompt", session["p100_llm_api_selection"]
+    )
     print(dot_graph_with_edges)
     dot_graph_with_edges = re.sub(r"//.*", "", dot_graph_with_edges)  # remove comments
 
     return dot_graph_with_edges
+
 
 def dot_add_edges_errorfunc(session):
     _prompt = f"""You are an assistant to a photonic engineer.
@@ -1066,7 +1158,7 @@ You have three input DOT graphs:
 - Graph3 has the correct definition of nodes but a definition of edges that failed a test for crossings.
 
 Follow these instructions:
-- add the edges from Graph2 to Graph1. 
+- add the edges from Graph2 to Graph1.
 - add the port numbers to the edge definitions (e.g. C1:o3 -- C2:o2;). Do not label the edges.
 - Do not change the node definitions (the labels and the ports) in Graph1.
 - Port are labelled as o1, o2, o3 etc, and they are ordered counter-clockwise around the rectangle node.
@@ -1092,7 +1184,9 @@ INPUT graph3:
 {session['p300_dot_string']}
 """
 
-    dot_graph_with_edges = call_llm(_prompt, "no prompt", session["p100_llm_api_selection"])
+    dot_graph_with_edges = call_llm(
+        _prompt, "no prompt", session["p100_llm_api_selection"]
+    )
     print(dot_graph_with_edges)
     dot_graph_with_edges = re.sub(r"//.*", "", dot_graph_with_edges)  # remove comments
 
@@ -1346,7 +1440,7 @@ Follow these guidelines:
   and off-chip components (e.g., fiber, free-space lenses/lasers, EDFA).
 - For each component, include specifications and descriptions if available.
 - Extract the number of optical input and output ports for each component, if specified. Do not infer port counts if not explicitly stated.
-- Avoid parsing descriptive modifiers or specifications as separate components. 
+- Avoid parsing descriptive modifiers or specifications as separate components.
 - If multiple instances of the same component are mentioned, list each explicitly.
 - If the article does not contain any on-chip photonic components, set this field to an empty list.
 
@@ -1403,30 +1497,30 @@ def parse_user_specs(session):
     # Check if the LLM call returned an error or is None/empty
     if parsed_user_specs is None:
         return {"Error": "No response received from LLM API"}
-    
+
     if not parsed_user_specs.strip():
         return {"Error": "Empty response received from LLM API"}
-    
+
     if parsed_user_specs.startswith("Error:"):
         return {"Error": parsed_user_specs}
 
     # Clean up the response - remove any markdown formatting and language identifiers
     parsed_user_specs = parsed_user_specs.strip()
-    
+
     # Remove markdown code blocks
-    if parsed_user_specs.startswith('```'):
-        lines = parsed_user_specs.split('\n')
-        if lines[0].startswith('```'):
+    if parsed_user_specs.startswith("```"):
+        lines = parsed_user_specs.split("\n")
+        if lines[0].startswith("```"):
             lines = lines[1:]
-        if lines[-1].startswith('```'):
+        if lines[-1].startswith("```"):
             lines = lines[:-1]
-        parsed_user_specs = '\n'.join(lines).strip()
-    
+        parsed_user_specs = "\n".join(lines).strip()
+
     # Remove language identifiers at the beginning (like "python", "yaml", etc.)
-    lines = parsed_user_specs.split('\n')
-    if lines and lines[0].strip().lower() in ['python', 'yaml', 'json']:
+    lines = parsed_user_specs.split("\n")
+    if lines and lines[0].strip().lower() in ["python", "yaml", "json"]:
         lines = lines[1:]
-        parsed_user_specs = '\n'.join(lines).strip()
+        parsed_user_specs = "\n".join(lines).strip()
 
     # Try to parse as YAML first, if that fails, try to parse as Python dict
     try:
@@ -1436,16 +1530,21 @@ def parse_user_specs(session):
         try:
             # If YAML fails, try to parse as Python dict using ast.literal_eval
             import ast
+
             return ast.literal_eval(parsed_user_specs)
         except (ValueError, SyntaxError) as eval_error:
             # If both fail, try to fix common issues and retry
             try:
                 # Try to fix common Python dict formatting issues
-                fixed_specs = parsed_user_specs.replace("'", '"')  # Replace single quotes with double quotes
+                fixed_specs = parsed_user_specs.replace(
+                    "'", '"'
+                )  # Replace single quotes with double quotes
                 return yaml.safe_load(fixed_specs)
             except yaml.YAMLError:
                 # If all parsing attempts fail, return the original string with an error indicator
-                return {"Error": f"Failed to parse LLM response. YAML error: {yaml_error}. Eval error: {eval_error}. Raw response: {parsed_user_specs}"}
+                return {
+                    "Error": f"Failed to parse LLM response. YAML error: {yaml_error}. Eval error: {eval_error}. Raw response: {parsed_user_specs}"
+                }
 
 
 def apply_settings(session, llm_api_selection):
@@ -1457,15 +1556,8 @@ def apply_settings(session, llm_api_selection):
     y1 = yaml.dump(session.p200_pretemplate_copy["components_list"])
     y2 = yaml.dump(session["p300_circuit_dsl"]["nodes"])
     llm_input = f"INPUT DESCRIPTION: \n{y1} \n\nNETLIST: \n{y2}"
-    
+
     updated_y2 = call_llm(llm_input, prompts["absorb_settings"], llm_api_selection)
-    # Pre-process the YAML: wrap unquoted 'comment' values in quotes.
-    updated_y2_fixed = re.sub(
-        r'^( *comment:\s*)(.+)$', 
-        lambda m: m.group(1) + '"' + m.group(2).strip().replace("-", "\n") + '"', 
-        updated_y2, 
-        flags=re.MULTILINE
-    )
     updated_y2 = yaml.safe_load(updated_y2)
     if "comment" in updated_y2:
         del updated_y2["comment"]

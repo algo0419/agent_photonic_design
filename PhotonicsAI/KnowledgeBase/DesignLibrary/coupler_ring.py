@@ -11,15 +11,18 @@ Bandwidth: 100 nm
 Args:
     -gap: spacing between parallel coupled straight waveguides
     -radius: radius of the 90 degree bends
-    -length_x: length of the parallel coupled straight waveguides 
+    -length_x: length of the parallel coupled straight waveguides
 """
 
 import gdsfactory as gf
 import numpy as np
 import sax
 
+from PhotonicsAI.KnowledgeBase.DesignLibrary import (
+    _directional_coupler,
+)
 from PhotonicsAI.Photon.utils import get_file_path, model_from_npz
-from PhotonicsAI.KnowledgeBase.DesignLibrary import bend_euler, straight, _directional_coupler
+
 
 @gf.cell
 def coupler_ring(
@@ -41,7 +44,7 @@ def coupler_ring(
     c.add_port("o3", port=ref.ports["o3"])
     c.add_port("o4", port=ref.ports["o4"])
 
-    c.flatten() 
+    c.flatten()
     return c
 
 

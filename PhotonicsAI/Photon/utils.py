@@ -25,7 +25,9 @@ if os.name == "nt":
     )
     for graphviz_bin in graphviz_candidates:
         if graphviz_bin.exists():
-            os.environ["PATH"] = f"{graphviz_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+            os.environ["PATH"] = (
+                f"{graphviz_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+            )
             os.add_dll_directory(str(graphviz_bin))
             break
 
@@ -477,7 +479,7 @@ def dot_planarity(dot_string):
     lines = dot_string.strip().splitlines()
     if lines and lines[0].strip() == "dot":
         dot_string = "\n".join(lines[1:])
-        
+
     # Load the dot string
     graph = pgv.AGraph(string=dot_string)
 

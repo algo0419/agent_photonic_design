@@ -18,7 +18,6 @@ import numpy as np
 import sax
 
 # from PhotonicsAI.Photon.utils import validate_cell_settings
-from PhotonicsAI.KnowledgeBase.DesignLibrary import _mmi1x2, bend_euler, straight
 
 # args = {
 #     'functional': {
@@ -44,6 +43,7 @@ def mrm_1x1_pndiode(gap: float = 0.3, radius: float = 5) -> gf.Component:
     # params = get_params(settings)
     return c
 
+
 def get_model(model="fdtd"):
     """Get the model."""
     if model == "ana":
@@ -51,9 +51,16 @@ def get_model(model="fdtd"):
     if model == "fdtd":
         return {"mrm_1x1_pndiode": get_model_fdtd}
 
+
+def get_model_ana(wl=1.5, length=10.0, neff=3.2) -> sax.SDict:
+    """Get analytic model."""
+    return sax.reciprocal({("o1", "o2"): np.exp(2j * np.pi * neff * length / wl)})
+
+
 def get_model_fdtd(wl=1.5, length=10.0, neff=3.2) -> sax.SDict:
     """Get FDTD model."""
     return sax.reciprocal({("o1", "o2"): np.exp(2j * np.pi * neff * length / wl)})
+
 
 if __name__ == "__main__":
     from pprint import pprint

@@ -195,7 +195,7 @@ The Automatic Workflow consists of 5 main phases:
 
 **Example Input:**
 ```
-Design a 2x2 Mach-Zehnder interferometer with TiN heaters for C-band operation. 
+Design a 2x2 Mach-Zehnder interferometer with TiN heaters for C-band operation.
 The circuit should have input/output ports and be suitable for optical switching applications.
 ```
 
@@ -470,7 +470,7 @@ For example outputs for each intermediate stage for all 4 prompts, refer to `./G
 
 **Input Prompt:**
 ```
-Design a directional coupler with 50/50 splitting ratio for C-band operation. 
+Design a directional coupler with 50/50 splitting ratio for C-band operation.
 The coupler should have 500nm wide waveguides, 2um coupling length, and 200nm gap between waveguides.
 ```
 
@@ -556,7 +556,7 @@ Two cascaded MZIs, each with a modulation bandwidth up to 10 GHz. Both MZIs have
 
 **Input Prompt:**
 ```
-Design a 1x8 power splitter using a three-stage MZI tree structure. 
+Design a 1x8 power splitter using a three-stage MZI tree structure.
 The first stage has 1 MZI splitting into 2 outputs, the second stage has 2 MZIs splitting to 4 outputs, and the third stage has 4 MZIs splitting to 8 outputs. Each MZI should have 50/50 splitting ratio and 500nm wide waveguides for C-band operation.
 ```
 
@@ -602,8 +602,8 @@ The first stage has 1 MZI splitting into 2 outputs, the second stage has 2 MZIs 
 
 **Input Prompt:**
 ```
-Design a 1×16 power splitter using 15 1×2 MMIs in a four-stage tree: the first stage has 1 MMI splitting into 2 outputs, 
-the second stage has 2 MMIs splitting to 4 outputs, and so on, until 16 outputs. Each of the 16 outputs should feed a VOA 
+Design a 1×16 power splitter using 15 1×2 MMIs in a four-stage tree: the first stage has 1 MMI splitting into 2 outputs,
+the second stage has 2 MMIs splitting to 4 outputs, and so on, until 16 outputs. Each of the 16 outputs should feed a VOA
 (variable optical attenuator) and then a thermo-optic phase shifter, finally connecting to a grating coupler.
 ```
 

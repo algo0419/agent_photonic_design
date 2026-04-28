@@ -50,8 +50,6 @@ def mzi_2x2_pn_diode(
 
     mmi2x2 = _mmi2x2._mmi2x2()
 
-  
-
     ref = c << gf.components.mzi2x2_2x2(
         delta_length=delta_length,
         length_y=129.215,

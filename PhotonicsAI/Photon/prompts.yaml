@@ -36,7 +36,7 @@ dot_verify: |
   Input is a yaml DOT graph.
   Each node has some ports labelled as o1, o2 etc.
   Check this condition:
-  The graph should have only one edge between any two nodes, counting all of their ports. Edges are defined using the syntax (C1:o3 -- C2:o2). 
+  The graph should have only one edge between any two nodes, counting all of their ports. Edges are defined using the syntax (C1:o3 -- C2:o2).
   If there is only one node there should most often be no edges.
 
   If necessary, modify the input DOT graph to satisfy these conditions. Do not add additional nodes under any circumstances.
