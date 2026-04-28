@@ -11,6 +11,24 @@ import jax.numpy as jnp
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+
+if os.name == "nt":
+    graphviz_candidates = []
+    graphviz_bin_env = os.getenv("GRAPHVIZ_BIN")
+    if graphviz_bin_env:
+        graphviz_candidates.append(pathlib.Path(graphviz_bin_env))
+    graphviz_candidates.extend(
+        [
+            pathlib.Path(r"C:\Program Files\Graphviz\bin"),
+            pathlib.Path(r"C:\Program Files (x86)\Graphviz\bin"),
+        ]
+    )
+    for graphviz_bin in graphviz_candidates:
+        if graphviz_bin.exists():
+            os.environ["PATH"] = f"{graphviz_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+            os.add_dll_directory(str(graphviz_bin))
+            break
+
 import pygraphviz as pgv
 from sax.saxtypes import Float, Model
 

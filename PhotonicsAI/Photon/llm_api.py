@@ -110,6 +110,25 @@ except FileNotFoundError:
 
 LOCATION='us-east5'
 
+
+def get_openai_client():
+    """Create an OpenAI client using the configured API key."""
+    return OpenAI(api_key=CONF.openai_api_key or os.getenv("OPENAI_API_KEY"))
+
+
+def resolve_reasoning_model(model=None):
+    """Resolve deprecated OpenAI reasoning model aliases."""
+    selected_model = model or CONF.openai_reasoning_model
+    if selected_model == "o1-preview":
+        print("OpenAI model 'o1-preview' is deprecated; using 'o1' instead.")
+        return "o1"
+    return selected_model
+
+
+def resolve_structured_output_model(model=None):
+    """Resolve the OpenAI model used for structured outputs."""
+    return model or CONF.openai_structured_model or "gpt-4o"
+
 def call_anthropic(prompt, sys_prompt, model='claude-3-7-sonnet-20250219'):
 
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -543,7 +562,7 @@ def call_nvidia(prompt, sys_prompt="", model="nvidia/llama-3.1-nemotron-ultra-25
     else:
         return [splice(r.message.content) for r in response.choices]
 
-def call_openai(prompt, sys_prompt="", model="gpt-4o", n_completion=1):
+def call_openai(prompt, sys_prompt="", model=None, n_completion=1):
     """Calling openai API.
 
     Args:
@@ -553,9 +572,9 @@ def call_openai(prompt, sys_prompt="", model="gpt-4o", n_completion=1):
     """
     prompt = truncate_prompt(prompt)
 
-    client = OpenAI(api_key=CONF.openai_api_key or os.getenv("OPENAI_API_KEY"))
+    client = get_openai_client()
     response = client.chat.completions.create(
-        model=model,
+        model=model or CONF.openai_chat_model,
         temperature=0.1,
         n=n_completion,
         messages=[
@@ -595,7 +614,7 @@ def call_openai(prompt, sys_prompt="", model="gpt-4o", n_completion=1):
         return [r.message.content for r in response.choices]
 
 
-def call_openai_reasoning(prompt, model="o1-preview"):
+def call_openai_reasoning(prompt, model=None):
     """Calling openai o1 model.
 
     Args:
@@ -604,9 +623,9 @@ def call_openai_reasoning(prompt, model="o1-preview"):
     """
     # prompt = truncate_prompt(prompt)
 
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = get_openai_client()
     response = client.chat.completions.create(
-        model=model,
+        model=resolve_reasoning_model(model),
         messages=[
             {"role": "user", "content": prompt},
         ],
@@ -636,7 +655,7 @@ def call_openai_reasoning(prompt, model="o1-preview"):
     return response.choices[0].message.content
 
 
-def callgpt_pydantic(prompt, sys_prompt, pydantic_model):
+def callgpt_pydantic(prompt, sys_prompt, pydantic_model, model=None):
     """Calling openai with pydantic model.
 
     Args:
@@ -644,10 +663,10 @@ def callgpt_pydantic(prompt, sys_prompt, pydantic_model):
         sys_prompt: The system prompt to send to the model.
         pydantic_model: The pydantic model to use for the completion.
     """
-    client = OpenAI()
+    client = get_openai_client()
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model=resolve_structured_output_model(model),
         messages=[
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": prompt},

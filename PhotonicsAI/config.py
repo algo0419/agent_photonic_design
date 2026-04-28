@@ -32,6 +32,9 @@ class Path:
 class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file=dotenv_path, extra="ignore")
     openai_api_key: str = ""
+    openai_chat_model: str = "gpt-4o"
+    openai_reasoning_model: str = "o3"
+    openai_structured_model: str = "gpt-4o"
 
 
 PATH = Path()

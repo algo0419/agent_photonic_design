@@ -31,7 +31,7 @@ import streamlit as st
 import yaml
 
 # Local imports
-from PhotonicsAI.config import PATH
+from PhotonicsAI.config import CONF, PATH
 from PhotonicsAI.Photon import llm_api, utils
 from PhotonicsAI.Photon.DemoPDK import *
 from PhotonicsAI.Photon.drc.drc import run_drc
@@ -43,11 +43,11 @@ from PhotonicsAI.Photon.drc.drc import run_drc
 # =============================================================================
 
 # LLM model configurations for different workflow steps
-entity_extraction_model = "o1"
-component_selection_model = "o1"
-component_specification_model = "o1"
-schematic_model = "o1"
-layout_model = "o1"
+entity_extraction_model = CONF.openai_reasoning_model
+component_selection_model = CONF.openai_reasoning_model
+component_specification_model = CONF.openai_reasoning_model
+schematic_model = CONF.openai_reasoning_model
+layout_model = CONF.openai_reasoning_model
 
 # HTML templates for UI styling
 # Used to create consistent visual elements throughout the interface
@@ -1027,7 +1027,7 @@ if "step_results" not in session:
 
 # LLM API configuration
 if "p100_llm_api_selection" not in session:
-    session.p100_llm_api_selection = "nvidia/nemotron-4-340b-instruct"
+    session.p100_llm_api_selection = CONF.openai_reasoning_model
 
 # Function to handle input submission and state changes
 def check_input_change():

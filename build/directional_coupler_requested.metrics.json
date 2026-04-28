@@ -1,0 +1,12 @@
+{
+  "settings": {
+    "length": 2.0,
+    "gap": 0.2,
+    "dx": 10.0,
+    "dy": 4.0
+  },
+  "gds_path": "C:\\Users\\Junhyung\\Desktop\\Agent_Photonics\\build\\directional_coupler_requested.gds",
+  "s31_power_at_1p55": 0.06698729810778069,
+  "s41_power_at_1p55": 0.9330127018922194,
+  "split_error_abs": 0.8660254037844387
+}

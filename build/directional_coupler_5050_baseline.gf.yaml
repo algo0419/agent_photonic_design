@@ -1,0 +1,18 @@
+instances:
+  N1:
+    component: _directional_coupler
+    settings:
+      length: 6.0
+      gap: 0.2
+      dx: 10.0
+      dy: 4.0
+placements:
+  N1:
+    x: 0.0
+    y: 0.0
+    rotation: 0
+ports:
+  o1: N1,o1
+  o2: N1,o2
+  o3: N1,o3
+  o4: N1,o4

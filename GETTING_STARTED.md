@@ -18,7 +18,7 @@ This comprehensive guide will walk you through setting up and using PhIDO (Photo
 ### System Requirements
 
 - **Operating System**: Linux (Ubuntu/Debian recommended)
-- **Python**: 3.12 or higher
+- **Python**: 3.11 to 3.13 recommended
 - **Memory**: At least 8GB RAM recommended
 - **Storage**: At least 2GB free space
 
@@ -34,6 +34,8 @@ sudo apt-get update
 sudo apt-get install graphviz libgraphviz-dev pkg-config klayout
 sudo apt-get install -y build-essential python3-dev swig
 ```
+
+On Windows, install Graphviz and Visual Studio 2022 Build Tools with the C++ workload so `pygraphviz` can build successfully.
 
 ### Step 2: Set Up Python Environment
 
@@ -88,8 +90,13 @@ touch .env
 Add your API keys to the `.env` file:
 
 ```bash
-# Required for OpenAI models (GPT-4, GPT-4o, O1)
+# Required for OpenAI models (GPT-4o, o1, o3)
 OPENAI_API_KEY='your-openai-api-key'
+
+# Optional model overrides used by webapp.py and llm_api.py
+OPENAI_CHAT_MODEL='gpt-4o'
+OPENAI_REASONING_MODEL='o3'
+OPENAI_STRUCTURED_MODEL='gpt-4o'
 
 # Required for Anthropic Claude models
 ANTHROPIC_API_KEY='your-anthropic-api-key'
@@ -104,7 +111,7 @@ DEEPSEEK_API_KEY='your-deepseek-api-key'
 NVIDIA_API_KEY='your-nvidia-nim-api-key'
 ```
 
-**Important**: The `OPENAI_API_KEY` is required even if you're using other models, as PhIDO uses GPT models for formatting entity extraction results.
+**Important**: The `OPENAI_API_KEY` is required even if you're using other models, as PhIDO uses OpenAI structured outputs for formatting entity extraction results.
 
 ### Supported LLM Models
 
@@ -112,7 +119,8 @@ PhIDO supports multiple LLM providers. You can configure different models for di
 
 #### OpenAI Models
 - **GPT-4o** (`gpt-4o`) - General purpose reasoning
-- **o1** (`o1`) - Specialized for reasoning tasks (Default)
+- **o3** (`o3`) - Current reasoning model for complex tasks (Default)
+- **o1** (`o1`) - Previous full o-series reasoning model
 - **o3-mini** (`o3-mini`) - Faster reasoning model
 
 #### Anthropic Models

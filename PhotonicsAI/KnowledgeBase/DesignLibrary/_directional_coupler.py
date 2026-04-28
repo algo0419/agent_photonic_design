@@ -30,6 +30,7 @@ from PhotonicsAI.Photon.utils import get_file_path, model_from_npz
 
 @gf.cell
 def _directional_coupler(
+    gap: float = 0.2,
     length: float = 20.0,
     dy: float = 4.0,
     dx: float = 10.0,
@@ -48,21 +49,21 @@ def _directional_coupler(
     return c
 
 
-def get_model(model: str = "fdtd") -> dict:
+def get_model(model: str = "ana") -> dict:
     if model == "ana":
         return {"_directional_coupler": get_model_ana}
     if model == "fdtd":
         return {"_directional_coupler": get_model_fdtd}
 
 
-def get_model_fdtd(wl=1.55):
+def get_model_fdtd(wl=1.55, **kwargs):
     file_path = get_file_path("FDTD/cband/coupler/coupler_adiabatic.npz")
     # file_path = get_file_path('FDTD/cband/mmi2x2/mmi2x2_taper1p3_length36p2_width5p52_gap0p27.npz')
     model_data = model_from_npz(file_path)
     return model_data(wl=wl)
 
 
-def get_model_ana(wl=1.5, length=12):
+def get_model_ana(wl=1.5, length=12, **kwargs):
     """A simple coupler model."""
     # wg_factor = np.exp(1j * np.pi * 2.34 * 1 / wl)
     wg_factor = 1

@@ -14,6 +14,8 @@ classifiers = [
   "Operating System :: OS Independent"
 ]
 dependencies = [
+    "anthropic",
+    "backoff",
     "gdsfactory~=8.18.1",
     "gplugins[sax,tidy3d]~=1.1.2",
     "sax==0.13.3",
@@ -39,11 +41,13 @@ dependencies = [
     "replicate",
     "sentence_transformers",
     "nltk",
+    "python-dotenv",
     "pyswarms",
     "google-generativeai",
     "mpld3",
     "pygraphviz",
     "tiktoken",
+    "deepseek_tokenizer",
     "haystack-ai",
     "bayesian-optimization",
     "protobuf==3.20.3",
