@@ -49,7 +49,7 @@ gitpython>=3.1.0
 
 # File handling and data
 h5py>=3.8.0
-h5netcdf>=1.0.0
+h5netcdf>=1.8.1
 pyaml
 jsonpickle>=3.0.0
 
